@@ -39,6 +39,9 @@ int partition(struct Process** proc_list, int lo, int hi) {
         struct Process* temp = proc_list[i];
         proc_list[i] =  proc_list[j];
         proc_list[j] = temp;
+
+        i++;
+        j--;
     }
 }
 int rand_partition(struct Process** proc_list, int lo, int hi) {
