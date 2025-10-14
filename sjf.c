@@ -1,77 +1,85 @@
-#include "process.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-#include <string.h>
+#include "statistics.h"
+#include "utility_structures.h"
 
-#define MAX_PROCS  200
+process_times *create_process_stats(proc *process);
 
-static int pick_shortest_job(float *arrival, float *run, int *done, int n, float now)
+int compare_time(void *, void *);
+
+all_stats shortest_job_first(llist *procs)
 {
-    int idx = -1;
-    float best = 1e9;
-    for (int i = 0; i < n; i++) {
-        if (!done[i] && arrival[i] <= now && run[i] < best) {
-            best = run[i];
-            idx  = i;
-        }
-    }
-    return idx;
+	int time = 0;
+
+	queue *proc_queue = (queue *)new_queue();
+	node *proc_ptr = procs->head;
+	if (procs->head == NULL)
+		fprintf(stderr, "NO PROC\n");
+
+	process_times *scheduled_proc = NULL;
+
+	llist *l = create_newlist();
+	
+	printf("\nSHORTEST JOB FIRST:\n");
+	
+	while (time < 100 || scheduled_proc != NULL)
+	{
+		if (proc_ptr != NULL)
+		{
+			proc *new_proc = (proc *)(proc_ptr->data);
+			while (proc_ptr != NULL && new_proc->arrival_time <= time)
+			{
+				add_queue(proc_queue, create_process_stats(new_proc));
+				sort(proc_queue, compare_time);
+				proc_ptr = proc_ptr->next;
+
+				if (proc_ptr != NULL)
+					new_proc = (proc *)(proc_ptr->data);
+			}
+		}
+
+		if (scheduled_proc == NULL && proc_queue->size > 0)
+		{
+			scheduled_proc = (process_times *)del_queue(proc_queue);
+		}
+
+		if (scheduled_proc != NULL)
+		{
+			proc *process = scheduled_proc->p;
+
+			printf("%c", process->proc_id);
+
+			if (scheduled_proc->start_time == -1)
+			{
+				scheduled_proc->start_time = time;
+			}
+			scheduled_proc->burst_time++;
+
+			if (scheduled_proc->burst_time >= process->burst_time)
+			{
+				scheduled_proc->end_time = time;
+				insert_newnode(l, scheduled_proc);
+				scheduled_proc = NULL;
+			}
+		}
+
+		time++;
+	}
+	printf("\n");
+
+	return print_all_stats(l);
 }
 
-int main(int argc, char **argv)
+int compare_time(void *data1, void *data2)
 {
-    int num_procs = (argc >= 2) ? atoi(argv[1]) : 50; //default 50
-    struct Process **plist = create_proc_list(num_procs);
-    sort_proc_list(plist, num_procs);
-
-    float arrival[num_procs], burst[num_procs];
-    for (int i = 0; i < num_procs; i++) {
-        arrival[i] = plist[i]->arrival_time;
-        burst[i]   = plist[i]->run_time;
-    }
-
-    // statistics arrays
-    float rem[num_procs];     memcpy(rem, burst, sizeof(rem));
-    float resp[num_procs];    for (int i = 0; i < num_procs; i++) resp[i] = -1;
-    float tat[num_procs], wt[num_procs];
-    int   done[num_procs];    memset(done, 0, sizeof(done));
-
-    float now = 0; int finished = 0;
-    while (finished < num_procs) {
-        int idx = pick_shortest_job(arrival, rem, done, num_procs, now);
-        if (idx == -1) { // jump to next
-            float next_arr = 1e9;
-            for (int i = 0; i < num_procs; i++)
-                if (!done[i] && arrival[i] > now && arrival[i] < next_arr)
-                    next_arr = arrival[i];
-            now = next_arr;
-            continue;
-        }
-        if (resp[idx] < 0) resp[idx] = now - arrival[idx];
-
-        now += rem[idx]; // run to completion
-        tat[idx]  = now - arrival[idx];
-        wt[idx]   = tat[idx] - burst[idx];
-        rem[idx]  = 0;
-        done[idx] = 1;
-        finished++;
-    }
-
-    // averages
-    float sum_tat = 0, sum_wt = 0, sum_resp = 0;
-    for (int i = 0; i < num_procs; i++) {
-        sum_tat  += tat[i];
-        sum_wt   += wt[i];
-        sum_resp += resp[i];
-    }
-    printf("\nSJF (%d procs)\n", num_procs);
-    printf("Average Turnaround Time: %.3f quanta\n",  sum_tat  / num_procs);
-    printf("Average Waiting Time:    %.3f quanta\n",  sum_wt   / num_procs);
-    printf("Average Response Time:   %.3f quanta\n",  sum_resp / num_procs);
-    printf("Throughput: %.3f procs/quantum\n",
-           (float)num_procs / now);
-
-    free_procs(plist, num_procs);
-    return 0;
+	process_times *pt1 = (process_times *)data1;
+	process_times *pt2 = (process_times *)data2;
+	if (((proc *)pt1->p)->burst_time < ((proc *)pt2->p)->burst_time)
+	{
+		return -1;
+	}
+	else
+	{
+		return 1;
+	}
 }

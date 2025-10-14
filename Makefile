@@ -1,23 +1,19 @@
 CC = gcc
-CFLAGS = -Wall -g -std=c11
-
-TARGET = fcfs
-
-SOURCES = fcfs.c queue.c process.c
-OBJECTS = $(SOURCES:.c=.o)
+CFLAGS = -Wall -g
+SRC = $(wildcard *.c)
+OBJ = $(patsubst %.c, build/%.o, $(SRC))
+TARGET = build/main
 
 all: $(TARGET)
 
-$(TARGET): $(OBJECTS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(OBJECTS)
+$(TARGET): $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^
 
-%.o: %.c
+build/%.o: %.c | build
 	$(CC) $(CFLAGS) -c $< -o $@
 
+build:
+	mkdir -p build
+
 clean:
-	rm -f $(TARGET) $(OBJECTS)
-
-run: all
-	./$(TARGET)
-
-.PHONY: all clean run
+	rm -rf build

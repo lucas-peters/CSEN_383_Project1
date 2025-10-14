@@ -1,69 +1,81 @@
-#include "process.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-#include <string.h>
+#include "statistics.h"
+#include "utility_structures.h"
 
-static int pick_shortest_remaining(float *arrival, float *rem, int n, int t_now)
-{
-    int best = -1;
-    float left = 1e9;
-    for (int i = 0; i < n; i++) {
-        if (arrival[i] <= t_now && rem[i] > 0 && rem[i] < left) {
-            left = rem[i];
-            best = i;
+process_times *create_process_stats(proc *process);
+int compare_remaining_time(void *d1, void *d2);
+
+all_stats srt(llist *procs) {
+    int time = 0;
+
+    queue *proc_queue = new_queue();
+    llist *completed_proc = create_newlist();
+
+    node *current_node = procs->head;
+    process_times *current_process = NULL;
+
+    printf("\n\n SHORTEST REMAINING TIME:\n");
+
+    while (time < 100 || current_process) {
+        if (current_process) {
+            add_queue(proc_queue, current_process);
+            current_process = NULL;
         }
-    }
-    return best;
-}
 
-int main(int argc, char **argv)
-{
-    int num_procs = (argc >= 2) ? atoi(argv[1]) : 50;
-    struct Process **plist = create_proc_list(num_procs);
-    sort_proc_list(plist, num_procs);
+        if (current_node) {
+            proc *new_proc_entry = current_node->data;
+            
+            while (current_node && new_proc_entry->arrival_time <= time) {
+                add_queue(proc_queue, create_process_stats(new_proc_entry));
+                
+                current_node = current_node->next;
+                if (current_node) {
+                    new_proc_entry = current_node->data;
+                }
+            }
 
-    float arrival[num_procs], burst[num_procs], rem[num_procs];
-    for (int i = 0; i < num_procs; i++) {
-        arrival[i] = plist[i]->arrival_time;
-        burst[i]   = plist[i]->run_time;
-        rem[i]     = burst[i];
-    }
+            sort(proc_queue, compare_remaining_time);
+        }
 
-    float resp[num_procs];  for (int i = 0; i < num_procs; i++) resp[i] = -1;
-    float tat[num_procs], wt[num_procs];
-    int   done_cnt = 0, time = 0;
+        if (!current_process && proc_queue->size) {
+            current_process = del_queue(proc_queue);
 
-    // run until every process is finished
-    while (done_cnt < num_procs) {
-        int idx = pick_shortest_remaining(arrival, rem, num_procs, time);
-        if (idx == -1) { time++; continue; } // nothing ready, idle
+            while (time >= 100 && current_process->start_time == -1) {
+                current_process = del_queue(proc_queue);
+            }
+        }
 
-        if (resp[idx] < 0) resp[idx] = time - arrival[idx]; // first touch
+        if (current_process) {
+            proc *process_detail = current_process->p;
+            printf("%c", process_detail->proc_id);
 
-        rem[idx] -= 1;
+            if (current_process->start_time == -1) {
+                current_process->start_time = time;
+            }
+
+            current_process->burst_time++;
+
+            if (current_process->burst_time >= process_detail->burst_time) {
+                current_process->end_time = time;
+                insert_newnode(completed_proc, current_process);
+                current_process = NULL;
+            }
+        }
+
         time++;
-
-        if (rem[idx] <= 0) { // completed this quantum
-            tat[idx] = time - arrival[idx];
-            wt[idx]  = tat[idx] - burst[idx];
-            done_cnt++;
-        }
     }
 
-    float sum_tat = 0, sum_wt = 0, sum_resp = 0;
-    for (int i = 0; i < num_procs; i++) {
-        sum_tat  += tat[i];
-        sum_wt   += wt[i];
-        sum_resp += resp[i];
-    }
-    printf("\nSRT (%d procs)\n", num_procs);
-    printf("Average Turnaround Time: %.3f quanta\n",  sum_tat  / num_procs);
-    printf("Average Waiting Time:    %.3f quanta\n",  sum_wt   / num_procs);
-    printf("Average Response Time:   %.3f quanta\n",  sum_resp / num_procs);
-    printf("Throughput: %.3f procs/quantum\n",
-           (float)num_procs / time);
-
-    free_procs(plist, num_procs);
-    return 0;
+    return print_all_stats(completed_proc);
 }
+
+int compare_remaining_time(void *d1, void *d2) {
+    process_times *p_state_1 = d1;
+    process_times *p_state_2 = d2;
+    
+    int remaining_time_1 = p_state_1->p->burst_time - p_state_1->burst_time;
+    int remaining_time_2 = p_state_2->p->burst_time - p_state_2->burst_time;
+
+    return remaining_time_1 < remaining_time_2 ? -1 : 1;
+}
+
