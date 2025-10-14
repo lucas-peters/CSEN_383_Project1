@@ -1,51 +1,89 @@
-#include "queue.h"
-#include "process.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
+#include "statistics.h"
+#include "utility_structures.h"
 
-int main(int argc, char **argv) {
-    int num_procs = 0;
-    if (argc < 2)
-        num_procs = 10;
+process_times *create_process_stats(proc *process) {
+    process_times *pt = malloc(sizeof(process_times));
 
-    srand(time(0));
-    int tat[num_procs]; // turn-around-time
-    int rpt[num_procs]; // response-time
-    int wt[num_procs]; // wait_time
-    int curr_time = 0;
-
-    struct Process** proc_list = create_proc_list(num_procs);
-    struct Process* proc;
-    sort_proc_list(proc_list, num_procs);
-
-    // fcfs logic
-    for (int i = 0; i < num_procs; i++) {
-        proc = proc_list[i];
-        
-        // cpu is idle
-        if (curr_time <= proc->arrival_time) {
-            wt[i] = 0;
-            rpt[i] = 0;
-        } else { // cpu was busy
-            wt[i] = curr_time - proc->arrival_time;
-            rpt[i] = wt[i];
-        }
-        tat[i] = wt[i] + proc->run_time;
-        curr_time += proc->run_time;
+    if (!pt) {
+        perror("Failed to allocate memory for process_times");
+        exit(EXIT_FAILURE);
     }
 
-    int total_wt = 0, total_rpt = 0, total_tat = 0;
+    pt->p = process;
+    pt->wait_time = 0;
+    pt->turn_around_time = 0;
+    pt->response_time = 0;
+    pt->burst_time = 0;
+    pt->start_time = -1;
+    pt->end_time = -1;
 
-    for (int i = 0; i < num_procs; i++) {
-        total_wt += wt[i];
-        total_rpt += rpt[i];
-        total_tat += tat[i];
-    }
-    
-    printf("Average Tunaround time: %f secpmds\n", (float)total_tat / (float)num_procs);
-    printf("Average Response Time: %f seconds\n", (float)total_rpt / (float)num_procs);
-    printf("Average Wait Time: %f seconds\n", (float)total_wt / (float)num_procs);
-    free_procs(proc_list, num_procs);
-    return 0;
+    return pt;
 }
+
+all_stats first_come_first_serve(llist *procs) {
+    int t = 0;
+    queue *proc_q = new_queue();
+
+    if (!proc_q) {
+        perror("Failed to allocate memory for queue");
+        exit(EXIT_FAILURE);
+    }
+
+    node *proc_ptr = procs->head;
+
+    if (!proc_ptr) {
+        fprintf(stderr, "No Process to schedule\n");
+    }
+
+    process_times *scheduled_proc = NULL;
+    llist *l = create_newlist();
+
+    if (!l) {
+        perror("Failed to allocate memory for llist");
+        exit(EXIT_FAILURE);
+    }
+
+    printf("\nFIRST COME FIRST SERVE:\n");
+
+    while (t < 100 || scheduled_proc) {
+        if (proc_ptr) {
+            proc *new_process = proc_ptr->data;
+
+            if (new_process->arrival_time <= t) {
+                add_queue(proc_q, create_process_stats(new_process));
+                proc_ptr = proc_ptr->next;
+            }
+        }
+
+        if (!scheduled_proc && proc_q->size > 0) {
+            scheduled_proc = del_queue(proc_q);
+        }
+
+        if (scheduled_proc) {
+            proc *process = scheduled_proc->p;
+            printf("%c", process->proc_id);
+
+            if (scheduled_proc->start_time == -1) {
+                scheduled_proc->start_time = t;
+            }
+
+            scheduled_proc->burst_time++;
+
+            if (scheduled_proc->burst_time >= process->burst_time) {
+                scheduled_proc->end_time = t;
+                insert_newnode(l, scheduled_proc);
+                scheduled_proc = NULL;
+            }
+        } else {
+            printf("_");
+        }
+
+        t++;
+    }
+
+    printf("\n");
+    return print_all_stats(l);
+}
+
