@@ -1,0 +1,21 @@
+# CSEN 383 Project 2 - Group 3
+
+## How to run:
+
+Open Command Prompt in the terminal then run:
+
+```gcc main.c create_new_process.c fcfs.c hpf_nonpreemptive.c hpf_preemptive.c rr.c sjf.c srt.c utility_structures.c -o main.exe
+
+You should see main.exe. Run
+
+```.\main.exe
+
+or 
+
+```./main.exe
+
+and it will ask for the number of processes. After you enter an integer, it will run like the output in output.txt
+
+
+
+
