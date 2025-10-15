@@ -1,135 +1,82 @@
-#include "process.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
-#include <string.h>
+#include "statistics.h"
+#include "utility_structures.h"
 
-static void q_init(int *q, int *head, int *tail, int cap) {
-    (void)cap; // cap unused here but kept for clarity/consistency
-    *head = 0; *tail = 0;
-}
+process_times *create_process_stats(proc *process);
 
-static int q_empty(int head, int tail) {
-    return head == tail;
-}
-
-static void q_push(int *q, int *tail, int cap, int v) {
-    q[*tail] = v;
-    *tail = (*tail + 1) % cap;
-}
-
-static int q_pop(int *q, int *head, int cap) {
-    int v = q[*head];
-    *head = (*head + 1) % cap;
-    return v;
-}
-
-int main(int argc, char **argv)
-{
-    int num_procs = (argc >= 2) ? atoi(argv[1]) : 50;
-    if (num_procs <= 0) {
-        fprintf(stderr, "num_procs must be > 0\n");
-        return 1;
-    }
-
-    struct Process **plist = create_proc_list(num_procs);
-    sort_proc_list(plist, num_procs);
-
-    float arrival[num_procs], burst[num_procs], rem[num_procs];
-    for (int i = 0; i < num_procs; i++) {
-        arrival[i] = plist[i]->arrival_time;
-        burst[i]   = plist[i]->run_time;
-        rem[i]     = burst[i];
-    }
-
-    float resp[num_procs];    
-	for (int i = 0; i < num_procs; i++) 
-		resp[i] = -1.0f;
-    float tat[num_procs];     
-	memset(tat, 0, sizeof(tat));
-    float wt[num_procs];      
-	memset(wt,  0, sizeof(wt));
-    int   finished = 0;
-    int   started[num_procs]; memset(started, 0, sizeof(started));
-
-    int cap = (num_procs < 1 ? 1 : num_procs) * 2; 
-    int *Q = (int*)malloc(sizeof(int) * cap);
-    int head, tail; q_init(Q, &head, &tail, cap);
-
+all_stats round_robin(llist *processes, int time_slice) {
     int time = 0;
-    int enq[num_procs]; memset(enq, 0, sizeof(enq));
+    int cur_run = 0;
+    node *current_node = NULL;
 
-    for (int i = 0; i < num_procs; i++) {
-        if (arrival[i] <= 0.0f && rem[i] > 0 && !enq[i]) {
-            q_push(Q, &tail, cap, i);
-            enq[i] = 1;
-        }
+    queue *proc_queue = new_queue();
+    llist *l = create_newlist();
+
+    if (!processes->head) {
+        fprintf(stderr, "NO PROCESSES\n");
     }
 
-    while (finished < num_procs) {
-        if (q_empty(head, tail)) {
-            float next_arr = 1e9f;
-            for (int i = 0; i < num_procs; i++) {
-                if (rem[i] > 0 && arrival[i] > (float)time && arrival[i] < next_arr) {
-                    next_arr = arrival[i];
+    node *proc_ptr = processes->head;
+    printf("\nROUND ROBIN:\n");
+
+    while (time < 100 || proc_queue->size > 0) {
+
+        if (proc_ptr && time < 100) {
+            proc *new_proc = proc_ptr->data;
+
+            while (proc_ptr && new_proc->arrival_time <= time) {
+                add_queue(proc_queue, create_process_stats(new_proc));
+                proc_ptr = proc_ptr->next;
+
+                if (proc_ptr) {
+                    new_proc = proc_ptr->data;
                 }
             }
-            if (next_arr < 1e8f) {
-                time = (int)next_arr;
-                for (int i = 0; i < num_procs; i++) {
-                    if (arrival[i] <= (float)time && rem[i] > 0 && !enq[i]) {
-                        q_push(Q, &tail, cap, i);
-                        enq[i] = 1;
-                    }
-                }
-            } else {
-                break;
+        }
+
+        if (!current_node) {
+            current_node = proc_queue->head;
+            cur_run = 0;
+        } else if (cur_run == time_slice) {
+            cur_run = 0;
+            current_node = current_node->next ? current_node->next : proc_queue->head;
+        }
+
+        if (current_node) {
+            process_times *scheduled_proc = current_node->data;
+            proc *process = scheduled_proc->p;
+
+            if (time >= 100 && scheduled_proc->start_time == -1) {
+                node *next_node = current_node->next;
+                del_node(proc_queue, current_node->data);
+                current_node = next_node;
+                cur_run = 0;
+                continue;
             }
-            continue;
-        }
 
-        int idx = q_pop(Q, &head, cap);
-        enq[idx] = 0;
+            printf("%c", process->proc_id);
+            cur_run++;
 
-        if (resp[idx] < 0.0f) {
-            resp[idx] = (float)time - arrival[idx];
-            if (!started[idx]) started[idx] = 1;
-        }
+            if (scheduled_proc->start_time == -1) {
+                scheduled_proc->start_time = time;
+            }
 
-        if (rem[idx] > 0.0f) rem[idx] -= 1.0f;
-        time += 1;
+            scheduled_proc->burst_time++;
 
-        for (int i = 0; i < num_procs; i++) {
-            if (rem[i] > 0 && !enq[i] && arrival[i] <= (float)time && !started[i]) {
-                q_push(Q, &tail, cap, i);
-                enq[i] = 1;
+            if (scheduled_proc->burst_time >= process->burst_time) {
+                scheduled_proc->end_time = time;
+                insert_newnode(l, scheduled_proc);
+                node *next_node = current_node->next;
+                del_node(proc_queue, current_node->data);
+                current_node = next_node;
+                cur_run = 0;
             }
         }
 
-        if (rem[idx] > 0.0f) {
-            if (!enq[idx]) { q_push(Q, &tail, cap, idx); enq[idx] = 1; }
-        } else {
-            tat[idx] = (float)time - arrival[idx];
-            wt[idx]  = tat[idx] - burst[idx];
-            finished++;
-        }
+        time++;
     }
 
-
-    float sum_tat = 0.0f, sum_wt = 0.0f, sum_resp = 0.0f;
-    for (int i = 0; i < num_procs; i++) {
-        sum_tat  += tat[i];
-        sum_wt   += wt[i];
-        sum_resp += resp[i];
-    }
-    printf("\nRR (q=1, %d procs)\n", num_procs);
-    printf("Average Turnaround Time: %.3f quanta\n",  sum_tat  / num_procs);
-    printf("Average Waiting Time:    %.3f quanta\n",  sum_wt   / num_procs);
-    printf("Average Response Time:   %.3f quanta\n",  sum_resp / num_procs);
-    printf("Throughput: %.3f procs/quantum\n",
-           (float)num_procs / (float)time);
-
-    free(Q);
-    free_procs(plist, num_procs);
-    return 0;
+    return print_all_stats(l);
 }
+

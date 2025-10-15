@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 		printf("total_number_of_processes: %d\n", processList->size);
 
 		fcfs[ctr] = first_come_first_serve(processList);
-		// rr[ctr] = round_robin(processList, 5);
+		rr[ctr] = round_robin(processList, 5);
 		sjf[ctr] = shortest_job_first(processList);
 		srf[ctr] = srt(processList);
 		hpfp[ctr] = hpf_p(processList);
@@ -77,10 +77,10 @@ int main(int argc, char **argv)
 		final[2].avg_turn_around += srf[i].avg_turn_around;	
 		final[2].avg_throughput += srf[i].avg_throughput;
 
-		// final[3].avg_response_time += rr[i].avg_response_time;
-		// final[3].avg_wait_time += rr[i].avg_wait_time;
-		// final[3].avg_turn_around += rr[i].avg_turn_around;
-		// final[3].avg_throughput += rr[i].avg_throughput;
+		final[3].avg_response_time += rr[i].avg_response_time;
+		final[3].avg_wait_time += rr[i].avg_wait_time;
+		final[3].avg_turn_around += rr[i].avg_turn_around;
+		final[3].avg_throughput += rr[i].avg_throughput;
 
 		final[4].avg_response_time += hpfp[i].avg_response_time;
 		final[4].avg_wait_time += hpfp[i].avg_wait_time;

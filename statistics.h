@@ -34,7 +34,7 @@ typedef struct {
 all_stats first_come_first_serve(llist *p);
 all_stats shortest_job_first(llist *p);
 all_stats srt(llist *p);
-// all_stats round_robin(llist *p, int time_slice);
+all_stats round_robin(llist *p, int time_slice);
 all_stats hpf_p(llist *p);
 all_stats hpf_np(llist *p);
 all_stats print_all_stats(llist *l);
